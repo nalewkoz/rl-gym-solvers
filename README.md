@@ -4,8 +4,9 @@ In this project I explore reinforcement learning algorithms applied to the Gym P
 
 ## API
 
-Currently, two main classes are provided in the `rlsolvers` package:   
-`gymTrainer` and `discreteQlearningAgent`. It is straightforward to train a new model:
+Currently, two main classes are provided in the `rlsolvers` package: `gymTrainer` and `discreteQlearningAgent`. An additional class `testAgent` implements a very simple handcrafted (rule-based) agent. 
+
+It is straightforward to train a new model:
 
 ```python
 import gym

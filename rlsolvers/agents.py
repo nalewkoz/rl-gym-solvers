@@ -42,8 +42,8 @@ class discreteQlearningAgent:
     Comments
     --------
     Currently, only tabular Q-learning is implemented. This is fine if the map is fixed, but 
-    will not generalize to new maps. A more powerful representation with a functional 
-    approximation (ConvNet?) is needed to solve a more general (and much more interesting!) 
+    will not generalize to new maps. A more powerful representation with a function 
+    approximation (ConvNet or just a simple nn?) is needed to solve a more general (and much more interesting!) 
     problem of an environment in which the map is randomly generated in each episode.
 
     This implementation is not very general. In particular, the number of states and actions 
