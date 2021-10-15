@@ -2,7 +2,6 @@
 
 It contains agents (classes) solving reinforcement learning tasks (environments). 
 Currently, designed to be used with discrete spaces of the Gym package.
-
 """
 
 import numpy as np
@@ -33,9 +32,11 @@ class discreteQlearningAgent:
         Selects action.
     update:
         Update the state and Q-function (observation + learning).
-    set_alpha:
+    
+    Private:
+    __set_alpha:
         Sets a new value of the learning rate (alpha).
-    set_beta:
+    __set_beta:
         Sets a new value of the inverse temperature (beta).
     
     Comments
@@ -60,7 +61,20 @@ class discreteQlearningAgent:
     """
 
     def __init__(self, gamma=0.99, alpha0=0.1, alpha_tau = 2000, beta0=3, beta_tau = 1e9, random_beta = True, state=0, Qinit=1, Nstates = 64, Nactions = 4):
-        """Initialize the agent. """
+        """Initialize the agent. 
+        
+        Args:
+            gamma (float): reward discount factor.
+            alpha0 (float): parameter of the learning rate scheduler.
+            alpha_tau (float): parameter of the learning rate scheduler.
+            beta0 (float): parameter of the inverse temperature scheduler.
+            beta_tau (float): parameter of the inverse temperature scheduler.
+            random_beta (bool): parameter of the inverse temperature scheduler.
+            Qinit (float): initial value of all Q-function entries.
+            Nstate (int): Number of states of the environment.
+            Nactions (int): Number of actions available to the agent.
+        
+        """
         
         # Initialize tabular Q function.
         # Shape should be (# of states, # of actions) = (64, 4). 
@@ -78,9 +92,15 @@ class discreteQlearningAgent:
         self.random_beta = random_beta
 
         # Set variables that should be reset at the beginning of each episode.
-        self.new_episode(episode = 0) 
+        self.new_episode(episode = 0, state=state) 
 
     def new_episode(self, episode=None, state=0):
+        """Start a new episode.
+        
+        Args:
+            episode (int): Episode number. If None, increment self.episode.
+            state (int): Starting state of the environment.
+        """
         # Initialize the state.
         self.s  = state
         # Initialize the action variable (None, because no action was taken so far)
@@ -92,23 +112,21 @@ class discreteQlearningAgent:
         else:
             self.episode = episode
         # Set a new value of alpha.
-        self.set_alpha(step = episode)
+        self.__set_alpha(step = episode)
         # Set a new value of beta.
-        self.set_beta(step = episode, random=self.random_beta)
+        self.__set_beta(step = episode, random=self.random_beta)
 
     def select_action(self, greedy=False):
-        """Select and return an action.
+        """Select and return an action. 
 
-        Available policies:
-        softmax and greedy. 
-
-        Parameters:
-        s -- current state
-        Q -- tabular Q function (Q[state,action])
-        beta -- inverse temperature of the softmax function
-        greedy (default False) -- if True, a deterministic (greedy with respect to Q) selection is used (effectively beta=infinity) 
+        Args:
+            greedy (bool): if True, a deterministic (greedy with respect to Q) action selection is used (effectively beta=infinity. Otherwise, softmax. 
         
-        Returns: an integer (action)
+        Returns: 
+            action (int): selected action.
+        
+        Available policies:
+            softmax and greedy.
         """ 
         if greedy:
             self.a = np.argmax(self.Q[self.s,:]) 
@@ -121,7 +139,15 @@ class discreteQlearningAgent:
         return self.a
     
     def update(self, obs, r, done, learn = True):
-        """Update the state of the agent as well as the Q-function estimator (if learn==True).
+        """Update the state of the agent. If learn is True, update the Q-function estimator.
+        
+        Args: 
+            Same as returned by gym.step():
+                obs (object): agent's observation of the current environment.
+                r (float): reward returned after previous action.
+                done (bool): whether the episode has ended.
+            Additional:
+                learn (bool): whether to update the Q-function estimator.
         
         The agent must have taken an action before.
         """
@@ -143,9 +169,9 @@ class discreteQlearningAgent:
         # Update the state.
         self.s = obs
 
-    def set_alpha(self, alpha=0, step = 0, scheduler=True):
+    def __set_alpha(self, alpha=0, step = 0, scheduler=True):
         """Set the learning rate. 
-
+        
         If scheduler is False alpha is set manually.
         Otherwise the argument step should be provided which 
         allows this function to determine the value of alpha according 
@@ -158,7 +184,7 @@ class discreteQlearningAgent:
             self.alpha = self.alpha0/(1 + step/self.alpha_tau)
         return self.alpha
 
-    def set_beta(self, beta=0, step = 0, scheduler=True, random=False):
+    def __set_beta(self, beta=0, step = 0, scheduler=True, random=False):
         """Set an inverse temperature for the softmax action selection. 
 
         If scheduler=False beta is set manually.
@@ -196,6 +222,14 @@ class testAgent(discreteQlearningAgent):
 
     """
     def select_action(self, greedy=False):
+        """Select action according to a simple rule-based controller.
+        
+        Args:
+            greedy (bool): (unused). Must be specified for the compatiblity.
+        
+        Returns:
+            self.a (int): selected action (always 2 or 3).
+        """
         if self.s < 7:      # Top row excluding the top right corner
             self.a = 3      # go UP
         elif self.s%8 == 7: # The first column from the right 

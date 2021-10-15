@@ -38,9 +38,9 @@ class gymTrainer:
     def __init__(self, env, agent=None):
         """Initialize an instance of the gymTrainer class.
 
-        env   -- gym environment, must be loaded externally.
-        agent -- either an instance of discreteQlearningAgent class, 
-        or a filename of a corresponding pickle. 
+        Args:
+            env (object): gym environment, must be loaded externally.
+            agent (object or str): either an instance of discreteQlearningAgent class, or a filename of a corresponding pickle. 
         """
         self.env   = env
         self.load_agent(agent)
@@ -50,15 +50,20 @@ class gymTrainer:
     def train(self, agent=None, Nepisodes=1000, visualize=True, save_name=None):
         """Train an agent.
 
-        agent can be:
-        None -- use the agent that is stored in self.agent
-        str  -- load the agent from a file 
-        discreteQlearningAgent -- or, more generally, an instance of a class that provides methods new_episode, select_action, and update.
-
+        Args:
+            agent (object or str): an instance of a class that provides methods new_episode, select_action, and update, see discreteQlearningAgent class.
+                                   if None, use the agent that is stored in self.agent. 
+                                   if str, load the agent from a file.
+            Nepisodes (int): Number of episodes to test on.
+            visualize (bool): whether to visualize the training progress (using matplotlib).
+            save_name (str): filename of a file to save the trained model (pickle). If None, the model is not saved.
+        
+        Returns:
+            self.log_noisy (list): logs of episodes using stochastic policy. For each episode, store a tuple (t, r, L), i.e., episode #, reward, length.
+            self.log_greedy (list): logs of episodes using greedy policy (with respect to Q). For each episode, store a tuple (t, r, L), i.e., episode #, reward, length.
+            
         Note that this method will replace self.agent with a new agent, if provided. 
         In this case it will also reset training logs.
-        
-        if visualize is True, a visualization of the training is generated using matplotlib.
         """
         if agent is not None:
             # Load a new agent.
@@ -69,14 +74,12 @@ class gymTrainer:
             if self.agent is None:
                 raise Exception("No agent to train (self.agent is None)")
 
-        agent = self.agent
-        env   = self.env
-        
         for i in range(Nepisodes):
             # We could read the state here, for environments not starting from s=0:
-            env.reset()
+            obs = self.env.reset()
+            
             try:
-                agent.new_episode()
+                self.agent.new_episode(state=obs)
             except AttributeError:
                 raise Exception("agent: method new_episode not implemented correctly.")
             # Alternate between greedy and stochastic policy. 
@@ -92,14 +95,14 @@ class gymTrainer:
             for j in range(MAX_LEN_EPISODE):
                 # Select an action.
                 try:
-                    action = agent.select_action(greedy=greedy)
+                    action = self.agent.select_action(greedy=greedy)
                 except AttributeError:
                     raise Exception("agent: method select_action not implemented correctly.")
                 # Take a step in the environment using our selected action and collect observations.
-                obs, r, done, info = env.step(action)
+                obs, r, done, info = self.env.step(action)
                 # Update agent's state and Q-function.
                 try:
-                    agent.update(obs, r, done)
+                    self.agent.update(obs, r, done)
                 except AttributeError:
                     raise Exception("agent: method update not implemented correctly.")
                 # If the episode is done, update the history.
@@ -124,15 +127,21 @@ class gymTrainer:
         return self.log_noisy, self.log_greedy
 
     def test(self, agent=None, Nepisodes=1000, summary=True):
-        """Train an agent.
+        """Test an agent.
 
-        agent can be:
-        None -- use the agent that is stored in self.agent
-        str  -- load the agent from a file 
-        an instance of a class that provides methods new_episode, select_action, and update, see discreteQlearningAgent class.
-
-        In contrast to train method, this method will not change self.agent, so it can be used to test 
+        Args:
+            agent (object or str): an instance of a class that provides methods new_episode, select_action, and update, see discreteQlearningAgent class.
+                                   if None, use the agent that is stored in self.agent. 
+                                   if str, load the agent from a file.
+            Nepisodes (int): Number of episodes to test on.
+            summary (bool): whether to print a summary.
+            
+        In contrast to the train method, this method will not change self.agent, so it can be used to test 
         different agents while keeping a single agent for training.
+        
+        Returns:
+            rhist (list): observed rewards in each episode.
+            lhist (list): observed length of each episode.
         """
         rhist = []
         lhist = []
@@ -141,13 +150,12 @@ class gymTrainer:
         else:
             agent = self.load_agent(agent, remember_agent=False)
 
-        env = self.env
-        
         for i in range(Nepisodes):
-            env.reset()
+
+            obs = self.env.reset()
             
             try:
-                agent.new_episode()
+                agent.new_episode(state=obs)
             except AttributeError:
                 raise Exception("agent: method new_episode not implemented correctly.")
 
@@ -158,7 +166,7 @@ class gymTrainer:
                 except AttributeError:
                     raise Exception("agent: method select_action not implemented correctly.")
                 # Take a step in the environment using our selected action and collect observations.
-                obs, r, done, info = env.step(action)
+                obs, r, done, info = self.env.step(action)
                 # Update agent's state (but do not train!)
                 try:
                     agent.update(obs, r, done, learn=False)
@@ -184,31 +192,27 @@ class gymTrainer:
             print(f"Win rate: {100*r_mean:.1f} \u00B1 {100*3*np.sqrt(r_mean*(1-r_mean))/np.sqrt(len(rhist_np)):.1f} %")
             print(f"Average number of steps: {l_mean:.1f} \u00B1 {3*l_std/np.sqrt(len(lhist_np)):.1f}")
         return rhist, lhist
-
-    def save_agent(self, fname):
-        """Save an object (agent) to a file (fname).
-        
-        Note that this function can save other objects too, 
-        since we are not checking here if the objects is an 
-        instance of a class that is consistent with 
-        the agent class. 
-        """
-        pickle.dump(self.agent, file=open(fname, "wb"))
     
     def render_episode(self, agent=None, dt=1):
-        """Render a single episode."""
+        """Render a single episode.
+        
+        Args:
+            agent (object or str): an agent from the module agents or a path to the corresponding pickle.
+            dt (float): delay between frames (in seconds)
+        """
 
         if agent is None:
             agent = self.agent
         else:
             agent = self.load_agent(agent, remember_agent=False)
     
+        obs = self.env.reset() 
+        
         try:
-            agent.new_episode()
+            agent.new_episode(state=obs)
         except AttributeError:
             raise Exception("agent: method new_episode not implemented correctly.")
         
-        self.env.reset() 
         os.system('cls' if os.name=='nt' else 'clear')
         self.env.render()
         
@@ -233,16 +237,35 @@ class gymTrainer:
                 break
             if j+1==MAX_LEN_EPISODE:
                 raise Exception(f"The length of the episode has hit the maximum number: {MAX_LEN_EPISODE}")
+         
+    def save_agent(self, fname):
+        """Save an object (self.agent) to a file (fname).
         
-    def load_agent(self, agent_name, remember_agent=True):
+        Args:
+            fname (str): filename used to save the agent.
+            
+        Note that this function could save other objects too, 
+        since we are not checking here if the objects is an 
+        instance of a class that is consistent with 
+        the agent class. 
+        """
+        pickle.dump(self.agent, file=open(fname, "wb"))
+    
+    def load_agent(self, agent, remember_agent=True):
         """Load and return an object (agent). 
-
-        If agent_name is a string, load the agent from a pickle file.
+        
+        Args:
+            agent (object or str): an agent from the module agents or a path to the corresponding pickle.
+            remember_agent (bool): whether to store the loaded agent as self.agent.
+        Returns:
+            agent_loaded (object): the loaded agent or None.
+            
+        If agent is a string, load the agent from a pickle file.
         If loading the file fails, set agent as None.
  
-        If agent_name is not a string this function assumes 
+        If agent is not a string this function assumes 
         that it is an instance of the class discreteQlearningAgent 
-        and loads it as such (setting self.agent to agent_name).
+        and loads it as such (setting self.agent to agent).
 
         The flag remember_agent is used to determine if self.agent should be replaced. 
         This is useful to switch between two alternative behaviors: 
@@ -253,22 +276,22 @@ class gymTrainer:
         instance of a class that is consistent with 
         the agent class. 
         
-        TO DO: check if the loaded object is an instance of the class...
+        TO DO: check if the loaded object is an instance of the class.
         """
 
-        if isinstance(agent_name, str):
+        if isinstance(agent, str):
             try:
-                agent = pickle.load(file=open(agent_name, "rb"))
+                agent_loaded = pickle.load(file=open(agent, "rb"))
             except FileNotFoundError:
-                print(f"File {agent_name} does not exist.") 
-                agent = None
+                print(f"File {agent} does not exist.") 
+                agent_loaded = None
         else:
-            agent = agent_name
+            agent_loaded = agent
         
         if remember_agent:
-            self.agent = agent
+            self.agent = agent_loaded
 
-        return agent
+        return agent_loaded
     
     def reset_logs(self):
         """Empty the lists containing logs."""
@@ -276,7 +299,14 @@ class gymTrainer:
         self.log_noisy  = []
 
     def __visualize_training_progress(self, log_list, title="", tau1=100, tau2=1000):
-        """ Visualize training progress. """
+        """ Visualize training progress. 
+        
+        Args:
+            log_list (list): list of tuples (each of length 3).
+            title (str): title of the figure.
+            tau1 (int): time constant of the first low-pass filter.
+            tau2 (int): time constant of the second low-pass filter.
+        """
         
         # List of tuples --> ndarray.
         # log[:,0] -- 'time steps' (episode #)
@@ -301,11 +331,13 @@ class gymTrainer:
     def __low_pass(self, x, tau=1):
         """Calculate and return a first-order linear low-pass filter of a 1D time series. 
 
-        Parameters:
-        x -- 1D numpy array with the time series to be filtered
-        tau -- time constant of the filter
+        Args:
+            x (ndarray): 1D numpy array with the time series to be filtered.
+            tau (int): time constant of the filter.
         
-        Returns: 1D numpy array with the filtered signal (same length as x)
+        Returns: 
+            y (ndarray): 1D numpy array with the filtered signal (same length as x).
+            
         """
         y = np.empty( (len(x)) )
         y[0] = np.mean(x[:tau])     # Initialize the first element with an average.
